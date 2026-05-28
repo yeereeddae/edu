@@ -1665,20 +1665,6 @@
     "classes": 6,
     "staff": 25,
     "is_small": true,
-    "integration_analysis": {
-      "integration_candidates": [
-        {
-          "target_name": "대전도안중학교",
-          "distance": 0.6,
-          "target_students": 820
-        },
-        {
-          "target_name": "대전원신흥중학교",
-          "distance": 0.7,
-          "target_students": 510
-        }
-      ]
-    },
     "predicted_5y": 96,
     "risk_level": "심각",
     "safety_score": 93,
@@ -1686,9 +1672,6 @@
     "extinction_risk": "상",
     "risk_reason": "학생 수 250명 미만으로 소규모 학교 기준에 해당하며, 최근 3개년 감소율이 15% 이상으로 급격한 소멸 위험이 감지됨.",
     "exclude_from_analysis": true,
-    "commute_distance_km": 0.6,
-    "commute_time_min": 1,
-    "target_school": "대전도안중학교",
     "prediction_confidence": 85
   },
   {
@@ -1793,20 +1776,6 @@
     "classes": 3,
     "staff": 18,
     "is_small": true,
-    "integration_analysis": {
-      "integration_candidates": [
-        {
-          "target_name": "대전가양중학교",
-          "distance": 4.8,
-          "target_students": 420
-        },
-        {
-          "target_name": "우송중학교",
-          "distance": 4.9,
-          "target_students": 410
-        }
-      ]
-    },
     "predicted_5y": 48,
     "risk_level": "심각",
     "safety_score": 87,
@@ -1814,9 +1783,6 @@
     "extinction_risk": "상",
     "risk_reason": "학생 수 250명 미만으로 소규모 학교 기준에 해당하며, 최근 3개년 감소율이 15% 이상으로 급격한 소멸 위험이 감지됨.",
     "exclude_from_analysis": true,
-    "commute_distance_km": 4.8,
-    "commute_time_min": 9,
-    "target_school": "대전가양중학교",
     "prediction_confidence": 85
   },
   {
