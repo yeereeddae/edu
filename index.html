@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대전 교육 미래 지도 - AI 기반 학교 통합 & 인프라 최적화</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f1f5f9; }
+        #map { height: 650px; border-radius: 1.5rem; }
+        .tab-button { @apply px-6 py-3 rounded-xl font-bold transition-all duration-300; }
+        .tab-button.active { @apply bg-indigo-600 text-white shadow-lg transform scale-105; }
+        .tab-button.inactive { @apply bg-white text-slate-500 hover:bg-slate-50 border border-slate-200; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .risk-tag { @apply px-2 py-1 rounded-md text-[10px] font-bold uppercase; }
+        .risk-high { @apply bg-rose-100 text-rose-700 border border-rose-200; }
+        .risk-medium { @apply bg-amber-100 text-amber-700 border border-amber-200; }
+        .risk-low { @apply bg-emerald-100 text-emerald-700 border border-emerald-200; }
+        
+        /* 학교 마커 커스텀 스타일 */
+        .school-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: bold;
+            color: white;
+            font-size: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            border: 3px solid white;
+        }
+        
+        .school-marker-high {
+            background-color: #f43f5e;
+            width: 32px;
+            height: 32px;
+            animation: pulse 2s infinite;
+        }
+        
+        .school-marker-medium {
+            background-color: #f59e0b;
+            width: 28px;
+            height: 28px;
+        }
+        
+        .school-marker-low {
+            background-color: #6366f1;
+            width: 24px;
+            height: 24px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 2px 8px rgba(244, 63, 94, 0.4); }
+            50% { box-shadow: 0 2px 16px rgba(244, 63, 94, 0.8); }
+        }
+        
+        /* 학교명 레이블 */
+        .school-label {
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #1e293b;
+            white-space: nowrap;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* 아파트 마커 */
+        .apt-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #10b981;
+            border: 2px solid white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <!-- Simple Login Modal -->
+    <div id="login-modal" class="modal active">
+        <div class="bg-white p-12 rounded-3xl shadow-2xl max-w-md w-full">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                </div>
+                <h2 class="text-2xl font-black text-slate-900">대전 교육 지도</h2>
+                <p class="text-slate-500 text-sm mt-2">사용자 이름을 입력해주세요</p>
+            </div>
+            <div class="mb-6">
+                <input type="text" id="user-name" placeholder="이름을 입력하세요" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+            </div>
+            <button onclick="loginUser()" class="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all transform hover:scale-105 shadow-lg">
+                🚀 시작하기
+            </button>
+        </div>
+    </div>
+
+    <div id="main-content" class="hidden">
+        <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <header class="mb-10 flex flex-col md:flex-row justify-between items-center gap-6">
+                <div class="text-left">
+                    <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">대전 교육 미래 지도</h1>
+                    <p class="text-slate-500 mt-2">공공데이터 기반 학교 소멸 위험 분석 및 통합 시뮬레이터</p>
+                </div>
+                <div class="flex gap-3 items-center">
+                    <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">전체 학교</p>
+                        <p class="text-xl font-black text-indigo-600" id="total-schools">92개교</p>
+                    </div>
+                    <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase">소멸 위험(상)</p>
+                        <p class="text-xl font-black text-rose-500" id="risk-count">12개교</p>
+                    </div>
+                    <button onclick="logoutUser()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-sm transition-all">
+                        로그아웃
+                    </button>
+                </div>
+            </header>
+
+            <!-- User Info -->
+            <div class="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-2xl border border-indigo-100 mb-8">
+                <p class="text-sm text-indigo-700 font-bold">👤 <span id="display-user-info">사용자</span>님이 접속했습니다.</p>
+            </div>
+
+            <!-- Main Navigation -->
+            <nav class="flex flex-wrap gap-4 mb-8">
+                <button class="tab-button active" onclick="switchTab('map-view')">📍 인터랙티브 지도</button>
+                <button class="tab-button inactive" onclick="switchTab('ai-forecast')">📈 AI 미래 예측</button>
+                <button class="tab-button inactive" onclick="switchTab('integration')">🔄 통합 시뮬레이션</button>
+                <button class="tab-button inactive" onclick="switchTab('policy')">💡 정책 제언</button>
+                <button class="tab-button inactive" onclick="switchTab('my-proposal')">✍️ 나의 정책 제안</button>
+                <button class="tab-button inactive" onclick="switchTab('sources')">📚 데이터 출처</button>
+            </nav>
+
+            <!-- Tab Content: Map View -->
+            <div id="tab-map-view" class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <aside class="lg:col-span-1 space-y-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            데이터 필터링
+                        </h3>
+                        <input type="text" id="search-input" placeholder="학교/아파트 검색..." class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        <div class="space-y-3">
+                            <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
+                                <input type="checkbox" id="show-schools" checked class="w-5 h-5 text-indigo-600 rounded-md">
+                                <span class="text-sm font-medium text-slate-600">중학교 위치</span>
+                            </label>
+                            <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
+                                <input type="checkbox" id="show-risk-only" class="w-5 h-5 text-rose-600 rounded-md">
+                                <span class="text-sm font-medium text-slate-600 text-rose-600">소멸 위험(상)만 보기</span>
+                            </label>
+                            <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
+                                <input type="checkbox" id="show-apts" checked class="w-5 h-5 text-emerald-600 rounded-md">
+                                <span class="text-sm font-medium text-slate-600">아파트 단지(배후수요)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-800 mb-4">구별 학교 현황</h3>
+                        <canvas id="guChart" height="220"></canvas>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-800 mb-4">소멸 위험군 분포</h3>
+                        <canvas id="riskChart" height="220"></canvas>
+                    </div>
+                </aside>
+                <main class="lg:col-span-3 relative">
+                    <div id="map" class="shadow-2xl"></div>
+                    <div class="absolute bottom-6 right-6 bg-white p-4 rounded-2xl shadow-lg z-[1000] max-w-xs border border-slate-100">
+                        <h4 class="text-xs font-bold text-slate-800 mb-3 uppercase tracking-tighter">🗺️ 지도 범례</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 bg-rose-500 rounded-full border-2 border-white shadow-md animate-pulse flex items-center justify-center">
+                                    <span class="text-white font-bold text-xs">S</span>
+                                </div>
+                                <span class="text-[10px] text-rose-600 font-bold">소멸 위험 (상)</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-7 h-7 bg-amber-500 rounded-full border-2 border-white shadow-md flex items-center justify-center">
+                                    <span class="text-white font-bold text-xs">S</span>
+                                </div>
+                                <span class="text-[10px] text-amber-600 font-bold">소멸 위험 (중)</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-6 h-6 bg-indigo-500 rounded-full border-2 border-white shadow-md flex items-center justify-center">
+                                    <span class="text-white font-bold text-xs">S</span>
+                                </div>
+                                <span class="text-[10px] text-indigo-600 font-bold">안정적 (하)</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-4 h-4 bg-emerald-500 rounded-full border-2 border-white shadow-md"></div>
+                                <span class="text-[10px] text-slate-600">아파트 단지</span>
+                            </div>
+                        </div>
+                        <p class="text-[9px] text-slate-400 mt-3 pt-3 border-t border-slate-100">💡 학교명 위에 마우스를 올려 상세 정보를 확인하세요.</p>
+                    </div>
+                </main>
+            </div>
+
+            <!-- Tab Content: AI Forecast -->
+            <div id="tab-ai-forecast" class="hidden">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <div class="flex items-center gap-4 mb-8">
+                        <div class="p-3 bg-indigo-100 rounded-2xl text-indigo-600">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-900">학교 소멸 위험 분석 (AI Forecast)</h2>
+                            <p class="text-slate-500">공공데이터 기반 미래 학생 수 예측 및 위험도 판정</p>
+                        </div>
+                    </div>
+                    
+                    <!-- AI 모델 설명 -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
+                            <h4 class="font-bold text-indigo-900 mb-2">📊 예측 모델</h4>
+                            <p class="text-slate-600 text-sm">선형 회귀 분석 기반 5년 학생수 예측. 과거 5년 학생수 추이를 분석하여 미래 학생수를 예측합니다.</p>
+                        </div>
+                        <div class="p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
+                            <h4 class="font-bold text-emerald-900 mb-2">📈 주요 변수</h4>
+                            <p class="text-slate-600 text-sm">현재 학생수, 학급수, 교사수, 인근 아파트 입주 연도 및 세대수 등을 종합 분석합니다.</p>
+                        </div>
+                        <div class="p-6 bg-amber-50 rounded-2xl border border-amber-100">
+                            <h4 class="font-bold text-amber-900 mb-2">⚠️ 위험도 판정</h4>
+                            <p class="text-slate-600 text-sm">상: 100명 미만 / 중: 100-450명 / 하: 450명 이상</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 신뢰도 및 통학 환경 -->
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 mb-4">
+                        <p class="text-sm text-slate-600"><span class="font-bold">📌 모델 신뢰도:</span> 평균 85% - 과거 5년 데이터 기반 선형 회귀 분석으로 예측하였으며, 예측값은 참고용입니다. 실제 학생수는 신입생 수, 전입/전출, 특수학급 등 다양한 요인에 의해 변동될 수 있습니다.</p>
+                    </div>
+                    <div class="p-4 bg-blue-50 rounded-xl border border-blue-200 mb-8">
+                        <p class="text-sm text-blue-800"><span class="font-bold">🚌 통학 환경 분석:</span> 거리 외에도 대중교통 연계성, 보행 접근성을 종합 고려합니다. 통합 후 학생들의 평균 통학 시간 변화를 시뮬레이션하여 최적의 통합 방안을 제시합니다.</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="forecast-list">
+                        <!-- Forecast cards injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Integration -->
+            <div id="tab-integration" class="hidden">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <div class="flex items-center gap-4 mb-8">
+                        <div class="p-3 bg-indigo-100 rounded-2xl text-indigo-600">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-900">통합 시뮬레이션</h2>
+                            <p class="text-slate-500">소멸 위험 학교 대상 최적 통합 거점 추천 로직</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 통합 프로세스 설명 -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="p-6 bg-blue-50 rounded-2xl border border-blue-100">
+                            <h4 class="font-bold text-blue-900 mb-2">1단계: 지역 거점 분석</h4>
+                            <p class="text-slate-600 text-sm">VWORLD API를 활용하여 5-10km 내 인근 거점 학교를 자동 분석합니다.</p>
+                        </div>
+                        <div class="p-6 bg-purple-50 rounded-2xl border border-purple-100">
+                            <h4 class="font-bold text-purple-900 mb-2">2단계: 수용 능력 검증</h4>
+                            <p class="text-slate-600 text-sm">기존 학교의 학급 및 학생 수용 가능 여부를 검증합니다.</p>
+                        </div>
+                        <div class="p-6 bg-pink-50 rounded-2xl border border-pink-100">
+                            <h4 class="font-bold text-pink-900 mb-2">3단계: 최적 시나리오 제시</h4>
+                            <p class="text-slate-600 text-sm">지역 수요 및 통학 환경을 고려한 최적 통합 방안을 제시합니다.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 통학 환경 분석 -->
+                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 mb-8">
+                        <p class="text-sm text-slate-600"><span class="font-bold">🚌 통학 환경 분석:</span> 거리 외에도 대중교통 연계성, 보행 접근성을 종합 고려합니다. 통합 후 학생들의 평균 통학 시간 변화를 시뮬레이션하여 최적의 통합 방안을 제시합니다.</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="integration-simulation">
+                        <!-- Simulation cards injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Policy -->
+            <div id="tab-policy" class="hidden space-y-8">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h2 class="text-2xl font-bold text-slate-900 mb-6">📢 데이터 기반 교육 정책 제언</h2>
+                    
+                    <!-- 1. 기본 정책 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                        <div class="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
+                            <h4 class="font-bold text-indigo-900 mb-2">거점 학교 중심 통합 모델</h4>
+                            <p class="text-slate-600 text-sm">소멸 위험 '상' 단계 학교를 인근 거점 학교와 통합하고, 기존 공간은 AI 융합 교육 센터로 전환하여 교육 인프라의 효율성을 극대화해야 합니다.</p>
+                        </div>
+                        <div class="p-6 bg-emerald-50 rounded-2xl border border-emerald-100">
+                            <h4 class="font-bold text-emerald-900 mb-2">배후 수요 연계 학급 조정</h4>
+                            <p class="text-slate-600 text-sm">인근 아파트 단지의 세대수 및 입주 연도를 분석하여, 학생 유입이 예상되는 지역의 학교는 소규모화되지 않도록 학급당 학생 수를 탄력적으로 조정해야 합니다.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 2. 폐교 부지 활용 방안 -->
+                    <div class="p-6 bg-amber-50 rounded-2xl border border-amber-200 mb-8">
+                        <h4 class="font-bold text-amber-900 mb-4">🏢 폐교 부지 활용 방안 (3가지)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="p-4 bg-white rounded-xl border border-amber-100">
+                                <h5 class="font-bold text-amber-800 mb-2">① 평생 학습 거점</h5>
+                                <p class="text-slate-600 text-xs">지역 주민 우선 이용권 보장, 성인 교육, 직업 훈련 프로그램 운영</p>
+                            </div>
+                            <div class="p-4 bg-white rounded-xl border border-amber-100">
+                                <h5 class="font-bold text-amber-800 mb-2">② AI 에듀테크 센터</h5>
+                                <p class="text-slate-600 text-xs">AI 기술 체험, 디지털 리터러시 교육, 지역 학생 대상 프로그램</p>
+                            </div>
+                            <div class="p-4 bg-white rounded-xl border border-amber-100">
+                                <h5 class="font-bold text-amber-800 mb-2">③ 커뮤니티 문화시설</h5>
+                                <p class="text-slate-600 text-xs">지역 문화 공간, 주민 소통 센터, 동아리 활동 거점</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 3. 사회적 합의 및 지원 방안 -->
+                    <div class="p-6 bg-rose-50 rounded-2xl border border-rose-200">
+                        <h4 class="font-bold text-rose-900 mb-4">💝 사회적 합의 및 전환 기간 지원책</h4>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-white rounded-lg border border-rose-100">
+                                <p class="text-xs font-bold text-rose-800 mb-1">📍 지역 주민 우선 이용권</p>
+                                <p class="text-xs text-slate-600">폐교 부지 활용 시 해당 지역 주민에게 우선 이용권 보장 및 운영 참여 기회 제공</p>
+                            </div>
+                            <div class="p-3 bg-white rounded-lg border border-rose-100">
+                                <p class="text-xs font-bold text-rose-800 mb-1">👨‍🏫 교사 재배치 및 지원</p>
+                                <p class="text-xs text-slate-600">통합 학교 우선 배치, 조기 퇴직 지원, 전직 교육 프로그램 운영</p>
+                            </div>
+                            <div class="p-3 bg-white rounded-lg border border-rose-100">
+                                <p class="text-xs font-bold text-rose-800 mb-1">🚌 학생 통학 안전 보장</p>
+                                <p class="text-xs text-slate-600">전용 통학 버스 운영, 통학 거리 보조금 지원, 안전 교육 강화</p>
+                            </div>
+                            <div class="p-3 bg-white rounded-lg border border-rose-100">
+                                <p class="text-xs font-bold text-rose-800 mb-1">💬 학생 심리 상담 지원</p>
+                                <p class="text-xs text-slate-600">전환 기간 학생 심리 상담, 학교 적응 프로그램, 또래 관계 형성 지원</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: My Proposal -->
+            <div id="tab-my-proposal" class="hidden">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h2 class="text-2xl font-bold text-slate-900 mb-6">✍️ 나의 정책 제안 게시판</h2>
+                    <div class="mb-8 bg-slate-50 p-6 rounded-2xl">
+                        <textarea id="proposal-text" rows="4" class="w-full p-4 bg-white border border-slate-200 rounded-xl mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="대전 교육 발전을 위한 아이디어를 자유롭게 제안해주세요..."></textarea>
+                        <button onclick="submitProposal()" class="px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all">제안 제출하기</button>
+                    </div>
+                    <div id="proposal-list" class="space-y-4">
+                        <!-- Proposals injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Sources -->
+            <div id="tab-sources" class="hidden">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h2 class="text-2xl font-bold text-slate-900 mb-6">📚 활용 공공데이터 출처</h2>
+                    <div class="overflow-hidden border border-slate-200 rounded-2xl">
+                        <table class="w-full text-left text-sm">
+
+                            <thead class="bg-slate-50 border-b border-slate-200">
+                                <tr>
+                                    <th class="px-6 py-3 font-bold text-slate-700">데이터 항목</th>
+                                    <th class="px-6 py-3 font-bold text-slate-700">출처</th>
+                                    <th class="px-6 py-3 font-bold text-slate-700">설명</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                <tr class="hover:bg-slate-50">
+                                    <td class="px-6 py-4 font-medium text-slate-900">중학교 위치 & 학생 현황</td>
+                                    <td class="px-6 py-4 text-slate-700 font-mono text-xs break-all">https://www.schoolinfo.go.kr/</td>
+                                    <td class="px-6 py-4 text-slate-600">교육부 공식 학교 정보 통합 시스템 (학교알리미)</td>
+                                </tr>
+                                <tr class="hover:bg-slate-50">
+                                    <td class="px-6 py-4 font-medium text-slate-900">대전 중학교 정보</td>
+                                    <td class="px-6 py-4 text-slate-700 font-mono text-xs break-all">https://www.data.go.kr/data/15109495/openapi.do</td>
+                                    <td class="px-6 py-4 text-slate-600">대전광역시 중고등학교 정보 (92개 중학교 위치 및 기본 정보)</td>
+                                </tr>
+                                <tr class="hover:bg-slate-50">
+                                    <td class="px-6 py-4 font-medium text-slate-900">아파트 단지 & 세대수</td>
+                                    <td class="px-6 py-4 text-slate-700 font-mono text-xs break-all">https://www.k-apt.go.kr/</td>
+                                    <td class="px-6 py-4 text-slate-600">국토교통부 공동주택관리정보시스템 (1,104개 아파트 단지 현황)</td>
+                                </tr>
+                                <tr class="hover:bg-slate-50">
+                                    <td class="px-6 py-4 font-medium text-slate-900">지리정보 & 좌표 변환</td>
+                                    <td class="px-6 py-4 text-slate-700 font-mono text-xs break-all">https://www.vworld.kr/</td>
+                                    <td class="px-6 py-4 text-slate-600">국토교통부 공간정보플랫폼 (주소 좌표 변환 및 지도 시각화)</td>
+                                </tr>
+                                <tr class="hover:bg-slate-50">
+                                    <td class="px-6 py-4 font-medium text-slate-900">교육 통계 연보</td>
+                                    <td class="px-6 py-4 text-slate-700 font-mono text-xs break-all">https://www.data.go.kr/data/15013455/fileData.do</td>
+                                    <td class="px-6 py-4 text-slate-600">대전광역시교육청 교육통계연보 (학생 수 추이 및 통계)</td>
+                                </tr>
+
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map, markers, aptMarkers;
+        let schoolsData = [];
+        let aptData = [];
+        let currentUser = "";
+        let proposals = JSON.parse(localStorage.getItem('dj_proposals') || '[]');
+
+        function loginUser() {
+            const name = document.getElementById('user-name').value.trim();
+            if (!name) return alert("이름을 입력해주세요!");
+            currentUser = name;
+            document.getElementById('login-modal').classList.remove('active');
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('display-user-info').innerText = name;
+            initApp();
+        }
+
+        function logoutUser() {
+            location.reload();
+        }
+
+        async function initApp() {
+            try {
+                const [sRes, aRes] = await Promise.all([
+                    fetch('schools_data.json'),
+                    fetch('apt_data.json')
+                ]);
+                schoolsData = await sRes.json();
+                aptData = await aRes.json();
+                
+                initMap();
+                renderCharts();
+                renderForecast();
+                renderIntegration();
+                renderProposals();
+                updateStats();
+            } catch (e) { console.error("Data load error:", e); }
+        }
+
+        function initMap() {
+            map = L.map('map').setView([36.3504, 127.3845], 12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+            
+            markers = L.featureGroup();
+            aptMarkers = L.markerClusterGroup();
+            
+            updateMarkers();
+            
+            document.getElementById('search-input').addEventListener('input', updateMarkers);
+            document.getElementById('show-schools').addEventListener('change', updateMarkers);
+            document.getElementById('show-risk-only').addEventListener('change', updateMarkers);
+            document.getElementById('show-apts').addEventListener('change', updateMarkers);
+        }
+
+        function updateMarkers() {
+            markers.clearLayers();
+            aptMarkers.clearLayers();
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const showSchools = document.getElementById('show-schools').checked;
+            const showRiskOnly = document.getElementById('show-risk-only').checked;
+            const showApts = document.getElementById('show-apts').checked;
+
+            if (showSchools) {
+                schoolsData.forEach(s => {
+                    if (s.name.toLowerCase().includes(query) || s.addr.toLowerCase().includes(query)) {
+                        if (showRiskOnly && s.extinction_risk !== '상') return;
+                        
+                        let color = '#6366f1'; // 하
+                        let riskClass = 'risk-low';
+                        let markerClass = 'school-marker-low';
+                        
+                        if (s.extinction_risk === '상') {
+                            color = '#f43f5e';
+                            riskClass = 'risk-high';
+                            markerClass = 'school-marker-high';
+                        } else if (s.extinction_risk === '중') {
+                            color = '#f59e0b';
+                            riskClass = 'risk-medium';
+                            markerClass = 'school-marker-medium';
+                        }
+
+                        // 커스텀 HTML 마커 생성
+                        const markerHtml = `<div class="school-marker ${markerClass}">S</div>`;
+                        const customIcon = L.divIcon({
+                            html: markerHtml,
+                            className: '',
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 16],
+                            popupAnchor: [0, -20]
+                        });
+
+                        const marker = L.marker([s.lat, s.lon], { icon: customIcon });
+
+                        // 학교명 레이블 추가
+                        const labelHtml = `<div class="school-label">${s.name}</div>`;
+                        const labelIcon = L.divIcon({
+                            html: labelHtml,
+                            className: '',
+                            iconSize: [120, 20],
+                            iconAnchor: [60, 0],
+                            popupAnchor: [0, 0]
+                        });
+                        const labelMarker = L.marker([s.lat, s.lon], { icon: labelIcon });
+
+                        const teachers = s.teachers || s.staff || 0;
+                        const predicted = s.predicted_5y || s.total_students || 0;
+                        const popupContent = `
+                            <div class="p-3 min-w-[240px]">
+                                <div class="flex justify-between items-start mb-3">
+                                    <h3 class="font-bold text-slate-900 text-sm">${s.name}</h3>
+                                    <span class="risk-tag ${riskClass}">소멸위험 ${s.extinction_risk}</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 mb-3">${s.addr}</p>
+                                <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2 rounded-lg mb-3">
+                                    <div><span class="text-slate-400">학생수:</span> <b>${s.total_students || 0}명</b></div>
+                                    <div><span class="text-slate-400">학급수:</span> <b>${s.classes || 0}개</b></div>
+                                    <div><span class="text-slate-400">교사:</span> <b>${teachers}명</b></div>
+                                    <div><span class="text-slate-400">5년 예측:</span> <b>${predicted}명</b></div>
+                                </div>
+                                <div class="mt-2 pt-2 border-t border-slate-200">
+                                    <p class="text-slate-600 font-medium text-[11px] mb-1">📋 판단 근거:</p>
+                                    <p class="text-slate-500 text-[10px] leading-tight">${s.risk_reason}</p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        marker.bindPopup(popupContent);
+                        markers.addLayer(marker);
+                        markers.addLayer(labelMarker);
+                    }
+                });
+                map.addLayer(markers);
+            }
+
+            if (showApts) {
+                aptData.forEach(a => {
+                    if (a.name.toLowerCase().includes(query)) {
+                        const markerHtml = `<div class="apt-marker"></div>`;
+                        const customIcon = L.divIcon({
+                            html: markerHtml,
+                            className: '',
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8],
+                            popupAnchor: [0, -10]
+                        });
+                        
+                        const marker = L.marker([a.lat, a.lon], { icon: customIcon });
+                        marker.bindPopup(`<div class="p-2"><b class="text-slate-800 text-xs">${a.name}</b><br><span class="text-[10px] text-slate-500">${a.households}세대</span></div>`);
+                        aptMarkers.addLayer(marker);
+                    }
+                });
+                map.addLayer(aptMarkers);
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-button').forEach(b => {
+                b.classList.remove('active');
+                b.classList.add('inactive');
+                if (b.innerText.includes(tabId === 'map-view' ? '지도' : (tabId === 'ai-forecast' ? '미래 예측' : (tabId === 'integration' ? '통합' : (tabId === 'policy' ? '정책 제언' : (tabId === 'my-proposal' ? '나의 정책' : '출처')))))) {
+                    b.classList.add('active');
+                    b.classList.remove('inactive');
+                }
+            });
+            if (tabId === 'map-view') setTimeout(() => map.invalidateSize(), 100);
+        }
+
+        function renderCharts() {
+            const gus = ["동구", "중구", "서구", "유성구", "대덕구"];
+            const guCounts = gus.map(g => schoolsData.filter(s => s.gu === g).length);
+            const riskCounts = gus.map(g => schoolsData.filter(s => s.gu === g && s.extinction_risk === '상').length);
+            
+            new Chart(document.getElementById('guChart'), {
+                type: 'bar',
+                data: { labels: gus, datasets: [{ label: '학교 수', data: guCounts, backgroundColor: '#6366f1' }] },
+                options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+
+            new Chart(document.getElementById('riskChart'), {
+                type: 'bar',
+                data: { labels: gus, datasets: [{ label: '소멸 위험(상)', data: riskCounts, backgroundColor: '#f43f5e' }] },
+                options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        function renderForecast() {
+            const list = document.getElementById('forecast-list');
+            list.innerHTML = schoolsData.filter(s => s.extinction_risk === '상').map(s => {
+                const predicted = s.predicted_5y || s.total_students || 0;
+                return `
+                <div class="p-6 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all">
+                    <div class="flex justify-between items-start mb-4">
+                        <h4 class="font-bold text-slate-900 text-sm">${s.name}</h4>
+                        <span class="risk-tag risk-high">위험도 상</span>
+                    </div>
+                    <div class="space-y-2 text-xs text-slate-600">
+                        <div class="flex justify-between"><span>현재 학생수</span><b class="text-slate-900">${s.total_students || 0}명</b></div>
+                        <div class="flex justify-between"><span>5년 후 예측</span><b class="text-rose-600">${predicted}명</b></div>
+                        <div class="mt-4 pt-4 border-t border-slate-100 font-medium text-slate-800">분석 근거:</div>
+                        <p class="text-slate-500 leading-relaxed">${s.risk_reason}</p>
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+
+        function renderIntegration() {
+            const list = document.getElementById('integration-simulation');
+            list.innerHTML = schoolsData.filter(s => s.is_small && s.integration_analysis).map(s => `
+                <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                    <h4 class="font-bold text-slate-900 mb-4 text-sm">${s.name} 통합 시나리오</h4>
+                    <div class="space-y-4">
+                        ${s.integration_analysis.integration_candidates.map((c, i) => `
+                            <div class="p-4 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-xs font-bold text-indigo-600">${i+1}순위 거점 학교</span>
+                                    <span class="text-[10px] text-slate-400">거리 ${c.distance}km</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <b class="text-slate-800 text-sm">${c.target_name}</b>
+                                    <span class="text-xs text-slate-500">수용 가능: ${c.target_students}명</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="mt-4 p-4 bg-indigo-600 text-white rounded-xl text-xs">
+                        <b>공간 활용 제언:</b> ${s.space_proposal}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function submitProposal() {
+            const text = document.getElementById('proposal-text').value.trim();
+            if (!text) return alert("제안 내용을 입력해주세요!");
+            
+            const proposal = {
+                id: Date.now(),
+                user: currentUser,
+                text: text,
+                date: new Date().toLocaleString()
+            };
+            
+            proposals.unshift(proposal);
+            localStorage.setItem('dj_proposals', JSON.stringify(proposals));
+            document.getElementById('proposal-text').value = "";
+            renderProposals();
+            alert("제안이 성공적으로 제출되었습니다!");
+        }
+
+        function deleteProposal(id) {
+            proposals = proposals.filter(p => p.id !== id);
+            localStorage.setItem('dj_proposals', JSON.stringify(proposals));
+            renderProposals();
+        }
+
+        function maskName(name) {
+            if (name.length <= 1) return "*";
+            if (name.length === 2) return name[0] + "*";
+            return name[0] + "*".repeat(name.length - 2) + name[name.length - 1];
+        }
+
+        function renderProposals() {
+            const list = document.getElementById('proposal-list');
+            list.innerHTML = proposals.map(p => `
+                <div class="p-6 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-900">${maskName(p.user)}</span>
+                            <span class="text-[10px] text-slate-400">${p.date}</span>
+                        </div>
+                        ${p.user === currentUser ? `<button onclick="deleteProposal(${p.id})" class="text-rose-500 text-xs font-bold hover:underline">삭제</button>` : ''}
+                    </div>
+                    <p class="text-slate-600 text-sm whitespace-pre-wrap">${p.text}</p>
+                </div>
+            `).join('');
+        }
+
+        function updateStats() {
+            const riskCount = schoolsData.filter(s => s.extinction_risk === '상' && !s.exclude_from_analysis).length;
+            document.getElementById('risk-count').innerText = `${riskCount}개교`;
+            document.getElementById('total-schools').innerText = `${schoolsData.length}개교`;
+        }
+    </script>
+</body>
+</html>
